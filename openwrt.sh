@@ -19,13 +19,19 @@ git config --global user.name "CI Builder"
 # Fetch the PR
 git fetch origin pull/23510/head:pr-23510 --force
 
-# Cherry-pick commits
-git log HEAD..pr-23510 \
-    --reverse \
-    --grep="jio\|jidu" \
-    --regexp-ignore-case \
-    --format="%H" |
-xargs -r git cherry-pick -X theirs
+# Cherry-pick commits individually, skipping ones that are already applied
+# (e.g. JIDU6101 support has been merged into mainline OpenWrt) or conflict.
+JIO_COMMITS=$(git log HEAD..pr-23510 --reverse --grep="jio\|jidu" --regexp-ignore-case --format="%H")
+
+for commit in $JIO_COMMITS; do
+  echo "Attempting to cherry-pick $commit"
+  if git cherry-pick -X theirs "$commit"; then
+    echo "  -> applied $commit"
+  else
+    echo "  -> skipping $commit (already applied or conflict)"
+    git cherry-pick --abort 2>/dev/null || git cherry-pick --skip 2>/dev/null || true
+  fi
+done
 
 
 echo "==> Adding initramfs-factory.ubi artifact"
